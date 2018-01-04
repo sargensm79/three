@@ -37,7 +37,7 @@ fopen = open(home_path + control_filename, "w")
 
 filenames = []
 
-for file in os.listdir(home_path + "sharded_input/"):
+for file in os.listdir(input_path):
     if file.startswith("AUTOGRAPH"):
         fopen.write(";".join(fix_file(file)))
         fopen.write("\n")
