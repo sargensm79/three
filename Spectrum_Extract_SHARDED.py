@@ -201,7 +201,7 @@ if call_r_file != 0:
     exit()
 
 print "Extract file(s) written!"
-"""
+
 file_transfer = subprocess.call(["nohup", "/usr/bin/python", "/home/ubuntu/Spectrum/ThreeUK/File_Transfer.py"])
 
 if file_transfer != 0:
@@ -209,4 +209,4 @@ if file_transfer != 0:
 else:
     print "Transfer complete!"
     os.remove("/home/ubuntu/nohup.out")
-"""
+
