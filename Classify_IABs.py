@@ -5,80 +5,72 @@ import csv
 import pandas as pd
 import mysql.connector
 import sqlalchemy
-from Classify_Dems import extract_filename
+from Classify_Dems import extract_filenames
 
-os.chdir("/home/ubuntu/Spectrum/ThreeUK/")
+os.chdir("/home/ubuntu/")
 
-iab_key = pd.read_excel("IAB_KEEP.xlsx")
+iab_key = pd.read_excel("/home/ubuntu/Spectrum/ThreeUK/IAB_KEEP.xlsx")
 
 rel_cols = ["AG_ID"] + list(iab_key["Code"])
 
-df = pd.read_csv("/home/ubuntu/" + extract_filename, quotechar='"', quoting=csv.QUOTE_ALL, sep=";")
+for extract_filename in extract_filenames:
+    df = pd.read_csv(extract_filename, quotechar='"', quoting=csv.QUOTE_ALL, sep=";")
+    
+    df = df[rel_cols]
+    df.set_index("AG_ID", inplace=True)
 
+    for col in df:
+        if df[col].isnull().values.all():
+            del df[col]
 
-df = df[rel_cols]
-df.set_index("AG_ID", inplace=True)
+    lst = []
 
-# Delete any null columns (saves space)
-for col in df:
-    if df[col].isnull().values.any():
-        del df[col]
+    for count, row in enumerate(df.iterrows()):
+        print(count)
+        t1 = row[1]
+        meet_threshold = t1[t1 >= 0.1]
+        for var in list(meet_threshold.index):
+            lst.append((meet_threshold.name, var))
 
-lst = []
+    tdf = pd.DataFrame(lst, columns=["userID", "Variable"])
 
-# Get all IABs above 1 for each AGID
-for count, row in enumerate(df.iterrows()):
-    print count
-    t1 = row[1]
-    meet_threshold = t1[t1 > 0]
-    for var in list(meet_threshold.index):
-        lst.append((meet_threshold.name, var))
+    headers = pd.read_excel("/home/ubuntu/Spectrum/ThreeUK/3UK_postproc_Join_Keys.xlsx")
 
-# Turn the list of profiles and IABs into a DF
-tdf = pd.DataFrame(lst, columns=["userID", "Variable"])
+    iabs = pd.merge(tdf, headers, how="inner", left_on="Variable", right_on="Variable")
 
-# Merge (inner) to IAB 1.0/2.0
-headers = pd.read_excel("3UK_postproc_Join_Keys.xlsx")
+    iabs = iabs[["userID", "Category", "Subcategory"]]
 
-iabs = pd.merge(tdf, headers, how="inner", left_on="Variable", right_on="Variable")
+    # OPEN DB CONNECTION
+    cnx = mysql.connector.connect(user="root", password="ch33s3h4t31", host="104.199.98.18", database="reporting_viz")
 
-iabs = iabs[["userID", "Category", "Subcategory"]]
+    ids = [[uid] for uid in iabs["userID"].unique()]
 
-# OPEN DB CONNECTION
-cnx = mysql.connector.connect(user="root", password="ch33s3h4t31", host="104.199.98.18", database="reporting_viz")
+    iabcursor = cnx.cursor()
 
-# Get IDs with IAB values
-ids = [[uid] for uid in iabs["userID"].unique()]
+    iabcursor.execute("""SET autocommit = 1;""")
 
-iabcursor = cnx.cursor()
+    iabcursor.execute("""create temporary table new_iabs (userID varchar(128), primary key (userID));""")
 
-iabcursor.execute("""SET autocommit = 1;""")
+    iabcursor.executemany("""insert into new_iabs 
+                        (userID)
+                        VALUES
+                        (%s);""", ids)
 
-iabcursor.execute("""create temporary table new_iabs (userID varchar(128), primary key (userID));""")
+    print "IDs inserted"
 
-iabcursor.executemany("""insert into new_iabs 
-                    (userID)
-                    VALUES
-                    (%s);""", ids)
+    iabcursor.execute("""DELETE FROM userCategories WHERE userID IN (SELECT userID FROM new_iabs);""")
 
-print "IDs inserted"
+    print "Old IDs deleted"
 
-# Delete existing IAB values of IDs
-iabcursor.execute("""DELETE FROM userCategories WHERE userID IN (SELECT userID FROM new_iabs);""")
+    cnx.commit()
 
-print "Old IDs deleted"
+    iabcursor.close()
 
-cnx.commit()
+    cnx.close()
 
-iabcursor.close()
+    sa_cnx = sqlalchemy.create_engine("mysql+mysqlconnector://root:ch33s3h4t31@104.199.98.18:3306/reporting_viz")
 
-cnx.close()
+    iabs.to_sql(name="userCategories", con=sa_cnx, schema="reporting_viz", if_exists="append", chunksize=5000, index=False)
 
-# Insert profiles and their new IAB categories
-
-sa_cnx = sqlalchemy.create_engine("mysql+mysqlconnector://root:ch33s3h4t31@104.199.98.18:3306/reporting_viz")
-
-iabs.to_sql(name="userCategories", con=sa_cnx, schema="reporting_viz", if_exists="append", chunksize=5000, index=False)
-
-print "New IABs inserted!"
+    print "New IABs inserted!"
 
