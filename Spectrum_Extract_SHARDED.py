@@ -189,3 +189,24 @@ overall_suffix = max([val.split("_")[2] for val in filenames.values()]).replace(
 old_header = [file for file in os.listdir("/home/ubuntu/") if file.startswith("AUTOGRAPH_PROFILE_HEADER")][0]
 header_name = "AUTOGRAPH_PROFILE_HEADER_" + overall_prefix + "_" + overall_suffix + ".enc"
 os.rename("/home/ubuntu/" + old_header, "/home/ubuntu/" + header_name)
+
+# Set R file to run
+r_file = "3UK_postproc_DEC26.R"
+
+
+call_r_file = subprocess.call(["nohup", "Rscript", "/home/ubuntu/THREE/" + r_file])
+
+if call_r_file != 0:
+    print "R process failed at " + str(datetime.datetime.now())
+    exit()
+
+print "Extract file(s) written!"
+"""
+file_transfer = subprocess.call(["nohup", "/usr/bin/python", "/home/ubuntu/Spectrum/ThreeUK/File_Transfer.py"])
+
+if file_transfer != 0:
+    print "File transfer / rewrite failed at " + str(datetime.datetime.now())
+else:
+    print "Transfer complete!"
+    os.remove("/home/ubuntu/nohup.out")
+"""
